@@ -12,8 +12,7 @@ from keras.utils import Sequence,to_categorical
 import keras
 from skimage.io import imread
 from skimage.transform import resize
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
+from sklearn.metrics import classification_report
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -60,10 +59,11 @@ def plot_images(images, cls_true, cls_pred=None):
 #########
 
 class DataPipeline(Sequence):
-    def __init__(self, data_dir,batch_size=8, train=False):
+    def __init__(self, data_dir,batch_size=8, train=False,resize=False):
         self.batch_size = batch_size
         self.data_dir = data_dir
         self.train = train
+        self.resize = resize
         self.LABELS_DICT = np.array(['gabbro',
                                       'diorite',
                                       'QFP',
@@ -100,7 +100,10 @@ class DataPipeline(Sequence):
         photo = imread(os.path.join(photo_path,file_path))
         photo = photo / 255
         label = to_categorical(self.df['labels'][idx], num_classes=5)
-        return resize(photo,(200,40),anti_aliasing=True),label
+        if self.resize:
+            return resize(photo,(200,40),anti_aliasing=True),label
+        else:
+            return photo,label
         # return np.pad(photo[200:424],((0,0),(12,12),(0,0)),mode='constant'), label
 
     def load_data(self):
@@ -146,6 +149,8 @@ def make_prediction(model,photos):
 def build_model(type,input_shape,loss='categorical_crossentropy'):
     if type.lower() == 'simple':
         model = simple_net(input_shape)
+    elif type.lower() == 'legend':
+        model = legend_net(input_shape)
 
     adam = keras.optimizers.Adam()
     model.compile(optimizer=adam,
@@ -165,6 +170,36 @@ def simple_net(input_shape):
     encoder = keras.layers.Activation('softmax')(encoder)
 
     return keras.Model(inputs=input,outputs=encoder)
+
+def legend_net(input_shape):
+
+    input = Input(shape=input_shape)
+    encoder = standard_conv_block(encoder,16)
+    encoder = keras.layers.MaxPooling2D(pool_size=(2,2))(encoder)
+    encoder = standard_conv_block(encoder,32)
+    encoder = standard_conv_block(encoder,32)
+    encoder = keras.layers.Dropout(0.5)(encoder)
+    encoder = keras.layers.MaxPooling2D(pool_size=(2,2))(encoder)
+    encoder = standard_conv_block(encoder,64)
+    encoder = standard_conv_block(encoder,64)
+    encoder = standard_conv_block(encoder,64)
+    encoder = keras.layers.Dropout(0.5)(encoder)
+    encoder = keras.layers.Flatten()(encoder)
+    encoder = keras.layers.Dense(64)(encoder)
+    encoder = keras.layers.BatchNormalization()(encoder)
+    encoder = keras.layers.Dropout(0.5)(encoder)
+    encoder = keras.layers.Activation('relu')(encoder)
+    encoder = keras.layers.Dense(5)(encoder)
+    encoder = keras.layers.Activation('softmax')(encoder)
+
+    return keras.Model(inputs=input,outputs=encoder)
+
+def standard_conv_block(input,num_filters,kernel_shape=(3,3),activation='relu'):
+    output = keras.layers.Conv2D(num_filters, kernel_shape, padding='same')(input)
+    output = keras.layers.BatchNormalization()(output)
+    return keras.layers.Activation(activation)(output)
+
+
 
 def train_model(data_dir,model,epochs):
     tb = keras.callbacks.TensorBoard(log_dir='./tensorboard-logs',
