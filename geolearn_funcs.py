@@ -173,8 +173,8 @@ def simple_net(input_shape):
 
 def legend_net(input_shape):
 
-    input = Input(shape=input_shape)
-    encoder = standard_conv_block(encoder,16)
+    input = keras.layers.Input(shape=input_shape)
+    encoder = standard_conv_block(input,16)
     encoder = keras.layers.MaxPooling2D(pool_size=(2,2))(encoder)
     encoder = standard_conv_block(encoder,32)
     encoder = standard_conv_block(encoder,32)
@@ -193,6 +193,9 @@ def legend_net(input_shape):
     encoder = keras.layers.Activation('softmax')(encoder)
 
     return keras.Model(inputs=input,outputs=encoder)
+
+def modified_VGG16(input_shape):
+    model = keras.applications.VGG16()
 
 def standard_conv_block(input,num_filters,kernel_shape=(3,3),activation='relu'):
     output = keras.layers.Conv2D(num_filters, kernel_shape, padding='same')(input)
